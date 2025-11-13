@@ -14,6 +14,12 @@
       padding: 4px;
       width: 160px;
     }
+    .big-menu {
+      margin-top: 8px;
+      padding: 6px;
+      width: 200px;
+      font-size: 15px;
+    }
   </style>
 </head>
 <body>
@@ -23,115 +29,139 @@
 <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 
 <script>
+
 // Cornwall bounding box [west, south, east, north]
 const cornwallBbox = [-5.75, 49.9, -3.9, 51.1];
 
 // Create the map with a fallback center (Truro)
 const map = L.map('map').setView([50.3755, -4.1427], 14);
 
-// Add OSM tiles
+// Add tiles
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Try to center on user location once at load
-map.locate({ setView: true, maxZoom: 16, watch: false });
+// Try to locate user
+map.locate({ setView: true, maxZoom: 16 });
 
-// When location is found, drop a marker
+// Drop marker on user location
 map.on("locationfound", (e) => {
   const userMarker = L.marker(e.latlng).addTo(map);
   userMarker.bindPopup("You are here").openPopup();
 });
 
+// Handle location error
 map.on("locationerror", () => {
-  console.warn("Could not get user location; showing fallback center.");
+  console.warn("Could not get user location.");
 });
 
-// Time constant: 3 months (approx 90 days)
-const THREE_MONTHS_MS = 1000 * 60 * 60 * 24 * 90;
+// Generate hex grid (300m)
+const hexGrid = turf.hexGrid(cornwallBbox, 0.3, {units: 'kilometers'});
 
-// Style for hexagons (default)
-function hexStyle() {
+// --- STORAGE & EXPIRY SYSTEM -----------------------------------------
+
+// localStorage key
+const CLAIM_STORAGE_KEY = "claimedHexesV1";
+
+// Load stored claims or empty object
+let claimedHexes = JSON.parse(localStorage.getItem(CLAIM_STORAGE_KEY) || "{}");
+
+// Expiry in milliseconds (90 days)
+const THREE_MONTHS = 90 * 24 * 60 * 60 * 1000;
+
+// Check expiry and clean old claims
+function cleanupExpiredClaims() {
+  const now = Date.now();
+  let changed = false;
+
+  for (const hexId in claimedHexes) {
+    if (now - claimedHexes[hexId] > THREE_MONTHS) {
+      delete claimedHexes[hexId];
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    localStorage.setItem(CLAIM_STORAGE_KEY, JSON.stringify(claimedHexes));
+  }
+}
+cleanupExpiredClaims();
+
+// ----------------------------------------------------------------------
+
+function hexStyle(claimed = false) {
   return {
     color: "#504806ff",
     weight: 1,
-    fillColor: "#bbb817ff",
-    fillOpacity: 0.4
+    fillColor: claimed ? "#f3d617" : "#bbb817ff",  // brighter when claimed
+    fillOpacity: claimed ? 0.8 : 0.4
   };
 }
 
-// Save hive claim state
-function saveHiveClaim(hexId, claimed) {
-  const record = {
-    claimed: claimed,
-    timestamp: Date.now()
-  };
-  localStorage.setItem(hexId, JSON.stringify(record));
-}
-
-// Load hive claim state
-function loadHiveClaim(hexId) {
-  const record = localStorage.getItem(hexId);
-  if (!record) return null;
-  try {
-    const parsed = JSON.parse(record);
-    if (Date.now() - parsed.timestamp < THREE_MONTHS_MS) {
-      return parsed.claimed;
-    } else {
-      // Expired -> remove
-      localStorage.removeItem(hexId);
-    }
-  } catch (e) {
-    console.warn("Corrupt localStorage entry for", hexId);
-  }
-  return null;
-}
-
-// Generate hex grid (300m ~ 0.3km)
-const hexGrid = turf.hexGrid(cornwallBbox, 0.3, {units: 'kilometers'});
-
-// Add hexes with dropdown popup
+// Add hexes with popup and menus
 L.geoJSON(hexGrid, {
-  style: hexStyle,
+  style: (feature) => {
+    const center = turf.center(feature).geometry.coordinates;
+    const hexId = "hex-" + center[1].toFixed(5) + "-" + center[0].toFixed(5);
+    const isClaimed = claimedHexes.hasOwnProperty(hexId);
+
+    return hexStyle(isClaimed);
+  },
+
   onEachFeature: function (feature, layer) {
     const center = turf.center(feature).geometry.coordinates;
-
-    // Unique ID per hex based on center coords
     const hexId = "hex-" + center[1].toFixed(5) + "-" + center[0].toFixed(5);
+    const bigMenuId = hexId + "-bigmenu";
 
-    // Check if this hex is already claimed in storage
-    const claimed = loadHiveClaim(hexId);
-    if (claimed) {
-      layer.setStyle({ fillOpacity: 0.8 });
-    }
-
-    // Dropdown HTML
+    // Popup HTML
     const dropdownHtml = `
-      <label for="${hexId}">Options for hex:</label><br/>
+      <label for="${hexId}">Options for hive:</label><br/>
       <select id="${hexId}" class="hex-dropdown">
         <option value="info-${hexId}">Show Hive Info</option>
-        <option value="action-${hexId}">Claim Hive</option>
+        <option value="claim-${hexId}">Claim Hive</option>
       </select>
+
+      <div id="${bigMenuId}" style="display:none; margin-top:10px;">
+        <label>Choose hive action:</label><br/>
+        <select class="big-menu">
+          <option value="">-- Select --</option>
+          <option value="register">Register as Keeper</option>
+          <option value="report">Report Hive Status</option>
+          <option value="queen">Mark Queen Status</option>
+          <option value="resources">Add Hive Resources</option>
+        </select>
+      </div>
     `;
 
-    // Bind popup with dropdown
     layer.bindPopup(dropdownHtml);
 
-    // Attach dropdown logic when popup opens
+    // Attach popup logic
     layer.on("popupopen", () => {
       const dropdown = document.getElementById(hexId);
+      const bigMenu = document.getElementById(bigMenuId);
+
       dropdown.addEventListener("change", (e) => {
         const val = e.target.value;
+
         if (val.startsWith("info")) {
-          alert("Info about hex at " + center[1].toFixed(5) + ", " + center[0].toFixed(5));
-        } else if (val.startsWith("action")) {
-          // Claim hive (change opacity + save state)
-          layer.setStyle({ fillOpacity: 0.8 });
-          saveHiveClaim(hexId, true);
+          alert("Hive info at " + center[1].toFixed(5) + ", " + center[0].toFixed(5));
+        }
+
+        if (val.startsWith("claim")) {
+          // Show large menu
+          bigMenu.style.display = "block";
+
+          // Record claim timestamp
+          claimedHexes[hexId] = Date.now();
+          localStorage.setItem(CLAIM_STORAGE_KEY, JSON.stringify(claimedHexes));
+
+          // Change the hex colour
+          layer.setStyle(hexStyle(true));
         }
       });
     });
   }
+
 }).addTo(map);
 
 </script>
