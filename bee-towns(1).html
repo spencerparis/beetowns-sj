@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bee Towns - Hive Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
+    .leaflet-container { background: #eef; }
+
+    #hex-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+    #hex-svg polygon.hex {
+      fill: #bbb817;
+      fill-opacity: 0.4;
+      stroke: #504806;
+      stroke-width: 1;
+      pointer-events: auto;
+      cursor: pointer;
+      transition: fill-opacity 120ms ease;
+    }
+    #hex-svg polygon.hex:hover { fill-opacity: 0.65; }
+    #hex-svg polygon.hex.claimed { fill-opacity: 0.85; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<script>
+// --- Map setup ---
+const cornwallBbox = [-5.75, 49.9, -3.9, 51.1]; // [w,s,e,n]
+
+const map = L.map('map').setView([50.3755, -4.1427], 14);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+map.locate({ setView: true, maxZoom: 16, watch: false });
+map.on('locationfound', (e) => {
+  L.marker(e.latlng).addTo(map).bindPopup('You are here').openPopup();
+});
+
+// --- SVG overlay inside Leaflet's overlay pane ---
+const svgNS = 'http://www.w3.org/2000/svg';
+const overlayPane = map.getPanes().overlayPane;
+
+const svg = document.createElementNS(svgNS, 'svg');
+svg.setAttribute('id', 'hex-svg');
+overlayPane.appendChild(svg);
+
+let polygons = [];
+
+function buildHexes(cornwallPoly) {
+  const hexGrid = turf.hexGrid(cornwallBbox, 0.3, { units: 'kilometers' });
+
+  const kept = hexGrid.features.filter((f) => {
+    // Keep hexes whose centre is on land within the Cornwall boundary.
+    const c = turf.center(f).geometry.coordinates;
+    const pt = turf.point(c);
+    return turf.booleanPointInPolygon(pt, cornwallPoly);
+  });
+
+  polygons = kept.map((feature) => {
+    const c = turf.center(feature).geometry.coordinates;
+    feature.properties.hexId = `hex-${c[1].toFixed(5)}-${c[0].toFixed(5)}`;
+    feature.properties.centerLngLat = c;
+
+    const poly = document.createElementNS(svgNS, 'polygon');
+    poly.setAttribute('class', 'hex');
+    poly.dataset.hexId = feature.properties.hexId;
+
+    // --- click ---
+    poly.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const [lng, lat] = feature.properties.centerLngLat;
+      const detail = {
+        hexId: feature.properties.hexId,
+        center: { lat, lng },
+        feature,
+        element: poly,
+      };
+      document.dispatchEvent(new CustomEvent('hex:click', { detail }));
+      console.log('hex clicked', detail);
+    });
+    // ---
+
+    svg.appendChild(poly);
+    return { feature, poly };
+  });
+
+  redraw();
+}
+
+// --- Load Cornwall boundary ---
+fetch('https://polygons.openstreetmap.fr/get_geojson.py?id=57537&params=0')
+  .then((r) => r.json())
+  .then((geo) => {
+    let cornwall;
+    if (geo.type === 'GeometryCollection') {
+      const polys = geo.geometries.filter(
+        (g) => g.type === 'Polygon' || g.type === 'MultiPolygon'
+      );
+      cornwall = turf.feature(polys[0]);
+      for (let i = 1; i < polys.length; i++) {
+        try { cornwall = turf.union(cornwall, turf.feature(polys[i])) || cornwall; }
+        catch (e) { /* ignore */ }
+      }
+    } else if (geo.type === 'Feature') {
+      cornwall = geo;
+    } else {
+      cornwall = turf.feature(geo);
+    }
+    buildHexes(cornwall);
+  })
+  .catch((err) => {
+    console.error('Failed to load Cornwall boundary, falling back to bbox grid', err);
+    // Fallback: bbox polygon so the map still shows hexes.
+    const fallback = turf.bboxPolygon(cornwallBbox);
+    buildHexes(fallback);
+  });
+
+// Reproject all hexes when map view changes
+function redraw() {
+  const bounds = map.getPixelBounds();
+  const size = bounds.getSize();
+  const topLeft = bounds.min;
+
+  // Position the SVG so its (0,0) lines up with the map's pixel origin.
+  L.DomUtil.setPosition(svg, topLeft);
+  svg.setAttribute('width', size.x);
+  svg.setAttribute('height', size.y);
+  svg.setAttribute('viewBox', `0 0 ${size.x} ${size.y}`);
+  // ---
+   
+  const viewBounds = map.getBounds().pad(0.1);
+
+  for (const { feature, poly } of polygons) {
+    const ring = feature.geometry.coordinates[0];
+
+    const [clng, clat] = feature.properties.centerLngLat;
+    if (!viewBounds.contains([clat, clng])) {
+      if (poly.parentNode) poly.parentNode.removeChild(poly);
+      continue;
+    }
+    if (!poly.parentNode) svg.appendChild(poly);
+
+    const pts = ring.map(([lng, lat]) => {
+      const p = map.latLngToLayerPoint([lat, lng]);
+      return `${p.x - topLeft.x},${p.y - topLeft.y}`;
+    }).join(' ');
+    poly.setAttribute('points', pts);
+  }
+}
+
+map.on('moveend zoomend viewreset', redraw);
+redraw();
+
+</script>
+</body>
+</html>
