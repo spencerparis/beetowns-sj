@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BeeTowns - Login</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+	<style>
+		* { box-sizing: border-box; margin: 0; padding: 0; }
+		body {
+			font-family: 'Inter', sans-serif;
+			background-color: #faf9f6;
+			color: #2d2d2d;
+			display: flex;
+			flex-direction: column;
+			min-height: 100vh;
+		}
+
+		.navbar {
+			background-color: #ffffff;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+			padding: 1rem 2rem;
+			display: flex;
+			justify-content: center;
+			position: sticky;
+			top: 0;
+			z-index: 1000;
+		}
+
+		.navbar nav { display:flex; gap:2rem; }
+		.navbar a { text-decoration:none; color:#4a4a4a; font-weight:500; }
+		.navbar a:hover { color:#d97706; }
+
+		.heading { display:flex; justify-content:center; align-items:center; background-color:#fef3c7; padding:2.5rem 1rem; border-bottom:1px solid #fde68a; }
+		#heading_image { max-width:100%; height:auto; max-height:200px; object-fit:contain; border-radius:8px; }
+
+		.content { flex:1; max-width:520px; width:92%; margin:3rem auto; }
+
+		.card {
+			background:#fff;
+			padding:2rem;
+			border-radius:12px;
+			box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+			border:1px solid #f3f4f6;
+		}
+
+		.form-title { font-size:1.25rem; font-weight:600; color:#111827; margin-bottom:0.75rem; }
+		.form-sub { color:#6b7280; margin-bottom:1.25rem; }
+
+		label { display:block; font-size:0.9rem; color:#374151; margin-bottom:0.35rem; }
+		input[type="email"], input[type="password"] {
+			width:100%; padding:0.75rem 1rem; border-radius:8px; border:1px solid #e6e6e6; margin-bottom:1rem; font-size:1rem;
+			background:#ffffff;
+		}
+
+		.actions { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:0.5rem; }
+
+		.login-button {
+			background-color: #f59e0b;
+			color: #ffffff;
+			border: none;
+			padding: 0.75rem 1.25rem;
+			font-size: 1rem;
+			font-weight: 600;
+			border-radius: 8px;
+			cursor: pointer;
+			box-shadow: 0 4px 6px -1px rgba(245,158,11,0.2);
+			transition: all 0.15s ease;
+		}
+
+		.login-button:hover { background-color: #d97706; transform: translateY(-1px); }
+
+		.small { font-size:0.9rem; color:#6b7280; }
+		.muted-link { color:#4a5568; text-decoration:none; font-weight:500; }
+
+		.footer { background-color:#1e1b4b; color:#94a3b8; text-align:center; padding:1.5rem 1rem; font-size:0.85rem; margin-top:2rem; }
+
+		@media (max-width:420px) {
+			.content { margin:2rem auto; }
+			.heading { padding:1.5rem 0.5rem; }
+		}
+	</style>
+</head>
+<body>
+	<header class="navbar">
+		<nav>
+			<a href="beetowns-sj/homepage.html">Home</a>
+			<a href="beetowns-sj/hivemap.html">The Hivemap</a>
+		</nav>
+	</header>
+
+	<section class="heading">
+		<img src="beetowns-sj/images/beetowns.png" id="heading_image" alt="BeeTowns Banner">
+	</section>
+
+	<main class="content">
+		<div class="card" role="region" aria-labelledby="login-heading">
+			<h1 id="login-heading" class="form-title">Welcome back</h1>
+			<p class="form-sub">Sign in to your BeeTowns account to access the Hivemap and community features.</p>
+
+			<form action="#" method="post" novalidate>
+				<label for="email">Email</label>
+				<input id="email" name="email" type="email" placeholder="you@example.com" required>
+
+				<label for="password">Password</label>
+				<input id="password" name="password" type="password" placeholder="Enter your password" required>
+
+				<div class="actions">
+					<div style="display:flex;align-items:center;gap:0.5rem;">
+						<input id="remember" name="remember" type="checkbox" aria-label="Remember me">
+						<label for="remember" class="small">Remember me</label>
+					</div>
+
+					<a href="#" class="muted-link">Forgot?</a>
+				</div>
+
+				<div style="margin-top:1.25rem; display:flex; gap:0.75rem; align-items:center;">
+					<button type="submit" class="login-button">Sign in</button>
+					<a href="beetowns-sj/homepage.html" class="small" style="align-self:center;">Back to Home</a>
+				</div>
+			</form>
+
+			<p class="small" style="margin-top:1rem;">New to BeeTowns? <a href="#" class="muted-link">Create an account</a></p>
+		</div>
+	</main>
+
+	<footer class="footer">
+		<p>&copy; 2026 BeeTowns. All rights reserved.</p>
+	</footer>
+</body>
+</html>
